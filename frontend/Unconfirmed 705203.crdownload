@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0" />
+<title>Fasal Sathi — AI Crop Recommendation</title>
+
+<!-- Tailwind CDN (kept simple for MVP / offline-friendly demo) -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Fonts: Poppins for headings (bold, easy to read at a glance),
+     Noto Sans + Noto Sans Devanagari for body text so Hindi renders cleanly -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          soil:   { DEFAULT: '#8B5E34', dark: '#5E3F22', light: '#C9A574' },
+          leaf:   { DEFAULT: '#2F6B3C', dark: '#1E4827', light: '#DDEFDD' },
+          wheat:  { DEFAULT: '#E3A93A', dark: '#B9822A', light: '#FBEBC9' },
+          sky:    { DEFAULT: '#3E7C9E', light: '#DBEEF7' },
+          cream:  '#FBF7EF',
+        },
+        fontFamily: {
+          heading: ['Poppins', 'Noto Sans Devanagari', 'sans-serif'],
+          body: ['Noto Sans', 'Noto Sans Devanagari', 'sans-serif'],
+        }
+      }
+    }
+  }
+</script>
+
+<style>
+  body { font-family: 'Noto Sans', 'Noto Sans Devanagari', sans-serif; }
+  h1, h2, h3, .font-heading { font-family: 'Poppins', 'Noto Sans Devanagari', sans-serif; }
+
+  /* Big, obvious focus rings for accessibility on low-literacy / rural UI */
+  button:focus-visible, select:focus-visible, input:focus-visible {
+    outline: 3px solid #3E7C9E;
+    outline-offset: 2px;
+  }
+
+  /* Chunky, thumb-friendly range sliders */
+  input[type="range"] {
+    -webkit-appearance: none;
+    height: 10px;
+    border-radius: 9999px;
+    background: #DDEFDD;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 30px; height: 30px;
+    border-radius: 9999px;
+    background: #2F6B3C;
+    border: 4px solid white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+    cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 30px; height: 30px;
+    border-radius: 9999px;
+    background: #2F6B3C;
+    border: 4px solid white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+    cursor: pointer;
+  }
+
+  .season-card.active { border-color: #2F6B3C; background: #DDEFDD; transform: translateY(-2px); }
+  .badge-return { background: #FBEBC9; color: #8B5E34; }
+  .badge-safe   { background: #DDEFDD; color: #1E4827; }
+  .badge-best   { background: #DBEEF7; color: #1E4E63; }
+  .spinner { border-top-color: #2F6B3C; }
+</style>
+</head>
+
+<body class="bg-cream min-h-screen text-soil-dark">
+
+<!-- ===================== HEADER ===================== -->
+<header class="bg-leaf text-white shadow-md sticky top-0 z-30">
+  <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="text-3xl" aria-hidden="true">🌾</span>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-heading font-extrabold leading-tight">Fasal Sathi</h1>
+        <p class="text-xs sm:text-sm text-leaf-light/90 font-medium" data-i18n="tagline">AI Crop Advisor for Farmers</p>
+      </div>
+    </div>
+    <!-- Language switcher: big, thumb-friendly tap targets -->
+    <div class="flex gap-1 bg-leaf-dark/40 rounded-xl p-1" role="group" aria-label="Language selector">
+      <button onclick="setLanguage('en')" id="lang-en" class="lang-btn px-3 py-2 rounded-lg text-sm font-bold">EN</button>
+      <button onclick="setLanguage('hi')" id="lang-hi" class="lang-btn px-3 py-2 rounded-lg text-sm font-bold">हिं</button>
+      <button onclick="setLanguage('sat')" id="lang-sat" class="lang-btn px-3 py-2 rounded-lg text-sm font-bold">ᱥᱟᱱ</button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-4 py-6 space-y-6">
+
+  <!-- ===================== STEP 1: SEASON ===================== -->
+  <section class="bg-white rounded-2xl shadow-sm border border-wheat-light p-5">
+    <h2 class="text-lg sm:text-xl font-heading font-bold text-leaf-dark mb-3">
+      <span aria-hidden="true">1️⃣</span> <span data-i18n="step1_title">Select Your Current Season</span>
+    </h2>
+    <div class="grid grid-cols-3 gap-3" id="season-cards">
+      <button class="season-card border-2 border-gray-200 rounded-xl py-4 flex flex-col items-center gap-1 transition" data-season="Kharif" onclick="selectSeason('Kharif')">
+        <span class="text-3xl" aria-hidden="true">🌧️</span>
+        <span class="font-semibold text-sm sm:text-base" data-i18n="season_kharif">Kharif (Monsoon)</span>
+      </button>
+      <button class="season-card border-2 border-gray-200 rounded-xl py-4 flex flex-col items-center gap-1 transition" data-season="Rabi" onclick="selectSeason('Rabi')">
+        <span class="text-3xl" aria-hidden="true">❄️</span>
+        <span class="font-semibold text-sm sm:text-base" data-i18n="season_rabi">Rabi (Winter)</span>
+      </button>
+      <button class="season-card border-2 border-gray-200 rounded-xl py-4 flex flex-col items-center gap-1 transition" data-season="Zaid" onclick="selectSeason('Zaid')">
+        <span class="text-3xl" aria-hidden="true">☀️</span>
+        <span class="font-semibold text-sm sm:text-base" data-i18n="season_zaid">Zaid (Summer)</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ===================== STEP 2: LOCATION / AUTO-FILL ===================== -->
+  <section class="bg-white rounded-2xl shadow-sm border border-wheat-light p-5">
+    <h2 class="text-lg sm:text-xl font-heading font-bold text-leaf-dark mb-3">
+      <span aria-hidden="true">2️⃣</span> <span data-i18n="step2_title">Your Location (auto-fill soil data)</span>
+    </h2>
+    <div class="flex flex-col sm:flex-row gap-3">
+      <select id="state-select" class="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 text-base font-medium">
+        <option value="" data-i18n="select_state">-- Select State --</option>
+        <option value="Jharkhand">Jharkhand</option>
+        <option value="Bihar">Bihar</option>
+        <option value="West Bengal">West Bengal</option>
+        <option value="Odisha">Odisha</option>
+        <option value="Uttar Pradesh">Uttar Pradesh</option>
+        <option value="Punjab">Punjab</option>
+        <option value="Maharashtra">Maharashtra</option>
+        <option value="Madhya Pradesh">Madhya Pradesh</option>
+        <option value="Rajasthan">Rajasthan</option>
+        <option value="Karnataka">Karnataka</option>
+      </select>
+      <button onclick="autoFillFromLocation()" class="bg-sky text-white font-bold px-5 py-3 rounded-xl active:scale-95 transition whitespace-nowrap">
+        <span aria-hidden="true">📍</span> <span data-i18n="autofill_btn">Auto-Fill Soil Data</span>
+      </button>
+    </div>
+    <p id="autofill-msg" class="text-sm text-sky mt-2 font-medium hidden"></p>
+    <p class="text-xs text-gray-500 mt-2" data-i18n="manual_hint">You can still adjust any value manually below.</p>
+  </section>
+
+  <!-- ===================== STEP 3: SOIL PARAMETERS ===================== -->
+  <section class="bg-white rounded-2xl shadow-sm border border-wheat-light p-5">
+    <h2 class="text-lg sm:text-xl font-heading font-bold text-leaf-dark mb-4">
+      <span aria-hidden="true">3️⃣</span> <span data-i18n="step3_title">Soil Parameters</span>
+    </h2>
+
+    <div class="mb-4">
+      <label class="block font-semibold mb-1" data-i18n="soil_type_label">Soil Type</label>
+      <select id="soil-type" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-base font-medium">
+        <option value="Alluvial">Alluvial</option>
+        <option value="Black">Black</option>
+        <option value="Red">Red</option>
+        <option value="Red & Laterite">Red & Laterite</option>
+        <option value="Laterite">Laterite</option>
+        <option value="Sandy">Sandy</option>
+        <option value="Clay">Clay</option>
+        <option value="Loamy">Loamy</option>
+      </select>
+    </div>
+
+    <div class="grid sm:grid-cols-2 gap-x-6 gap-y-4">
+      <div>
+        <label class="flex justify-between font-semibold mb-1">
+          <span data-i18n="ph_label">Soil pH</span> <span id="ph-val" class="text-leaf font-bold">6.5</span>
+        </label>
+        <input type="range" id="ph" min="4" max="9" step="0.1" value="6.5" oninput="syncVal('ph')">
+      </div>
+      <div>
+        <label class="flex justify-between font-semibold mb-1">
+          <span data-i18n="moisture_label">Soil Moisture (%)</span> <span id="moisture-val" class="text-leaf font-bold">50</span>
+        </label>
+        <input type="range" id="moisture" min="0" max="100" step="1" value="50" oninput="syncVal('moisture')">
+      </div>
+      <div>
+        <label class="flex justify-between font-semibold mb-1">
+          <span data-i18n="n_label">Nitrogen (N, kg/ha)</span> <span id="n-val" class="text-leaf font-bold">40</span>
+        </label>
+        <input type="range" id="n" min="0" max="150" step="1" value="40" oninput="syncVal('n')">
+      </div>
+      <div>
+        <label class="flex justify-between font-semibold mb-1">
+          <span data-i18n="p_label">Phosphorus (P, kg/ha)</span> <span id="p-val" class="text-leaf font-bold">20</span>
+        </label>
+        <input type="range" id="p" min="0" max="80" step="1" value="20" oninput="syncVal('p')">
+      </div>
+      <div>
+        <label class="flex justify-between font-semibold mb-1">
+          <span data-i18n="k_label">Potassium (K, kg/ha)</span> <span id="k-val" class="text-leaf font-bold">30</span>
+        </label>
+        <input type="range" id="k" min="0" max="100" step="1" value="30" oninput="syncVal('k')">
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== SUBMIT ===================== -->
+  <button onclick="getRecommendations()" class="w-full bg-wheat hover:bg-wheat-dark text-soil-dark font-heading font-extrabold text-lg py-4 rounded-2xl shadow-md active:scale-[0.98] transition flex items-center justify-center gap-2">
+    <span aria-hidden="true">🌱</span> <span data-i18n="submit_btn">Get Crop Recommendations</span>
+  </button>
+
+  <!-- ===================== LOADING ===================== -->
+  <div id="loading" class="hidden flex flex-col items-center justify-center py-8 gap-3">
+    <div class="spinner w-10 h-10 border-4 border-gray-200 rounded-full animate-spin"></div>
+    <p class="font-medium text-leaf-dark" data-i18n="loading_text">Analyzing soil & market data...</p>
+  </div>
+
+  <!-- ===================== ERROR ===================== -->
+  <div id="error-box" class="hidden bg-red-50 border-2 border-red-200 text-red-700 rounded-xl p-4 font-medium"></div>
+
+  <!-- ===================== RESULTS ===================== -->
+  <section id="results-section" class="hidden">
+    <h2 class="text-xl font-heading font-bold text-leaf-dark mb-4 flex items-center gap-2">
+      <span aria-hidden="true">🏆</span> <span data-i18n="results_title">Recommended Crops for You</span>
+    </h2>
+    <div id="results-grid" class="grid sm:grid-cols-2 gap-4"></div>
+  </section>
+
+</main>
+
+<footer class="text-center text-xs text-soil/70 py-6">
+  <span data-i18n="footer_note">Prototype for SIH — estimates are illustrative, not live market data.</span>
+</footer>
+
+<script>
+// =====================================================================
+// CONFIG
+// =====================================================================
+const API_BASE = "https://sih-crop-recomender.onrender.com"; // live Render backend
+
+// =====================================================================
+// i18n — English / Hindi / Santali (Santali shown in Latin+Devanagari
+// transliteration for this demo; production should use Ol Chiki script
+// with a native-speaker-reviewed translation + Noto Sans Ol Chiki font).
+// =====================================================================
+const LANG = {
+  en: {
+    tagline: "AI Crop Advisor for Farmers",
+    step1_title: "Select Your Current Season",
+    season_kharif: "Kharif (Monsoon)",
+    season_rabi: "Rabi (Winter)",
+    season_zaid: "Zaid (Summer)",
+    step2_title: "Your Location (auto-fill soil data)",
+    select_state: "-- Select State --",
+    autofill_btn: "Auto-Fill Soil Data",
+    manual_hint: "You can still adjust any value manually below.",
+    step3_title: "Soil Parameters",
+    soil_type_label: "Soil Type",
+    ph_label: "Soil pH",
+    moisture_label: "Soil Moisture (%)",
+    n_label: "Nitrogen (N, kg/ha)",
+    p_label: "Phosphorus (P, kg/ha)",
+    k_label: "Potassium (K, kg/ha)",
+    submit_btn: "Get Crop Recommendations",
+    loading_text: "Analyzing soil & market data...",
+    results_title: "Recommended Crops for You",
+    footer_note: "Prototype for SIH — estimates are illustrative, not live market data.",
+    select_season_err: "Please select a season first.",
+    select_state_err: "Please select a state to auto-fill.",
+    autofill_success: "Soil data filled from regional average. Adjust if you know exact values.",
+    net_profit: "Net Profit / Acre",
+    roi: "Return on Investment",
+    suitability: "Soil & Climate Match",
+    soil_health: "Soil Health Score",
+    rotation_tip: "Rotation Tip",
+    badge_return: "💰 Highest Return",
+    badge_safe: "🌱 Soil Safe",
+    badge_best: "⭐ Best Match",
+  },
+  hi: {
+    tagline: "किसानों के लिए एआई फसल सलाहकार",
+    step1_title: "अपना मौसम चुनें",
+    season_kharif: "खरीफ (बरसात)",
+    season_rabi: "रबी (सर्दी)",
+    season_zaid: "जायद (गर्मी)",
+    step2_title: "आपका स्थान (मिट्टी डेटा अपने आप भरें)",
+    select_state: "-- राज्य चुनें --",
+    autofill_btn: "मिट्टी डेटा भरें",
+    manual_hint: "आप नीचे किसी भी मान को स्वयं बदल सकते हैं।",
+    step3_title: "मिट्टी के गुण",
+    soil_type_label: "मिट्टी का प्रकार",
+    ph_label: "मिट्टी का pH",
+    moisture_label: "मिट्टी की नमी (%)",
+    n_label: "नाइट्रोजन (N, किग्रा/हे)",
+    p_label: "फॉस्फोरस (P, किग्रा/हे)",
+    k_label: "पोटैशियम (K, किग्रा/हे)",
+    submit_btn: "फसल सुझाव पाएं",
+    loading_text: "मिट्टी व बाजार डेटा का विश्लेषण हो रहा है...",
+    results_title: "आपके लिए सुझाई गई फसलें",
+    footer_note: "यह SIH के लिए प्रोटोटाइप है — अनुमान उदाहरण मात्र हैं, वास्तविक बाजार डेटा नहीं।",
+    select_season_err: "कृपया पहले मौसम चुनें।",
+    select_state_err: "कृपया राज्य चुनें।",
+    autofill_success: "क्षेत्रीय औसत से मिट्टी डेटा भरा गया। यदि सही मान पता हों तो बदल लें।",
+    net_profit: "शुद्ध लाभ / एकड़",
+    roi: "निवेश पर प्रतिफल",
+    suitability: "मिट्टी व जलवायु अनुकूलता",
+    soil_health: "मिट्टी स्वास्थ्य स्कोर",
+    rotation_tip: "फसल चक्र सुझाव",
+    badge_return: "💰 सर्वाधिक लाभ",
+    badge_safe: "🌱 मिट्टी सुरक्षित",
+    badge_best: "⭐ सर्वोत्तम मेल",
+  },
+  sat: {
+    // Santali (transliterated for demo — replace with Ol Chiki script for production)
+    tagline: "हड़ाम रेयाक् AI बागान गुरु (Farmers' AI Advisor)",
+    step1_title: "आम रेयाक् ओड़ोक् (मौसम) कुरीमे",
+    season_kharif: "खरीफ (सेरमा)",
+    season_rabi: "रबी (राबाङ)",
+    season_zaid: "जायद (उनुम)",
+    step2_title: "आम रेयाक् ठिकाना (हासा आंकड़ा अपने आप)",
+    select_state: "-- राज्य कुरीमे --",
+    autofill_btn: "हासा आंकड़ा भोरे",
+    manual_hint: "आम लातार रेन् जे मान् आपने बदले दाड़ेयाम",
+    step3_title: "हासा (मिट्टी) रेयाक् गुण",
+    soil_type_label: "हासा रेयाक् किसिम",
+    ph_label: "हासा pH",
+    moisture_label: "हासा दा (नमी %)",
+    n_label: "नाइट्रोजन (N)",
+    p_label: "फॉस्फोरस (P)",
+    k_label: "पोटैशियम (K)",
+    submit_btn: "बागान सलाह ना मे",
+    loading_text: "हासा आर बाजार आंकड़ा सानाम होचोए...",
+    results_title: "आम लागित् बागान सलाह",
+    footer_note: "नोवा SIH रेयाक् नमूना काम — आंकड़ाको उदाहरण खाने, असली बाजार आंकड़ा नाहाँ।",
+    select_season_err: "बानुक् आम् ओड़ोक् कुरीमे",
+    select_state_err: "बानुक् राज्य कुरीमे",
+    autofill_success: "एलाका रेयाक् औसत सेताक् हासा आंकड़ा भोरलेना। सही मान बादियाम खान बदलमे।",
+    net_profit: "लाभ / एकड़",
+    roi: "निवेश फिरका",
+    suitability: "हासा-आम् मेल",
+    soil_health: "हासा जिवि स्कोर",
+    rotation_tip: "बागान बदल सलाह",
+    badge_return: "💰 बड़ लाभ",
+    badge_safe: "🌱 हासा निरापद",
+    badge_best: "⭐ बेस मेल",
+  }
+};
+
+let currentLang = 'en';
+let selectedSeason = null;
+
+function setLanguage(lang) {
+  currentLang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (LANG[lang][key]) el.textContent = LANG[lang][key];
+  });
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('bg-white', 'text-leaf-dark'));
+  const activeBtn = document.getElementById('lang-' + lang);
+  if (activeBtn) activeBtn.classList.add('bg-white', 'text-leaf-dark');
+  // Re-render results (if any) in the new language
+  if (window.lastResults) renderResults(window.lastResults);
+}
+
+function selectSeason(season) {
+  selectedSeason = season;
+  document.querySelectorAll('.season-card').forEach(c => {
+    c.classList.toggle('active', c.dataset.season === season);
+  });
+}
+
+function syncVal(id) {
+  document.getElementById(id + '-val').textContent = document.getElementById(id).value;
+}
+
+// =====================================================================
+// AUTO-FILL FROM LOCATION
+// =====================================================================
+async function autoFillFromLocation() {
+  const state = document.getElementById('state-select').value;
+  const msg = document.getElementById('autofill-msg');
+  if (!state) {
+    alert(LANG[currentLang].select_state_err);
+    return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/soil-defaults?state=${encodeURIComponent(state)}`);
+    if (!res.ok) throw new Error('No data');
+    const data = await res.json();
+
+    document.getElementById('soil-type').value = matchSoilOption(data.soil_type);
+    document.getElementById('ph').value = data.ph; syncVal('ph');
+    document.getElementById('n').value = data.n; syncVal('n');
+    document.getElementById('p').value = data.p; syncVal('p');
+    document.getElementById('k').value = data.k; syncVal('k');
+    document.getElementById('moisture').value = data.moisture; syncVal('moisture');
+
+    msg.textContent = LANG[currentLang].autofill_success;
+    msg.classList.remove('hidden');
+  } catch (e) {
+    msg.textContent = "Could not fetch regional data. Please enter manually.";
+    msg.classList.remove('hidden');
+  }
+}
+
+function matchSoilOption(soilType) {
+  const select = document.getElementById('soil-type');
+  for (const opt of select.options) {
+    if (opt.value === soilType) return opt.value;
+  }
+  return select.options[0].value;
+}
+
+// =====================================================================
+// GET RECOMMENDATIONS
+// =====================================================================
+async function getRecommendations() {
+  const errorBox = document.getElementById('error-box');
+  errorBox.classList.add('hidden');
+
+  if (!selectedSeason) {
+    errorBox.textContent = LANG[currentLang].select_season_err;
+    errorBox.classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+
+  const payload = {
+    season: selectedSeason,
+    soil_type: document.getElementById('soil-type').value,
+    ph: parseFloat(document.getElementById('ph').value),
+    n: parseFloat(document.getElementById('n').value),
+    p: parseFloat(document.getElementById('p').value),
+    k: parseFloat(document.getElementById('k').value),
+    moisture: parseFloat(document.getElementById('moisture').value),
+  };
+
+  document.getElementById('loading').classList.remove('hidden');
+  document.getElementById('results-section').classList.add('hidden');
+
+  try {
+    const res = await fetch(`${API_BASE}/api/recommend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || 'Server error');
+    const data = await res.json();
+    window.lastResults = data.recommendations;
+    renderResults(data.recommendations);
+  } catch (e) {
+    errorBox.textContent = "Error: " + e.message + " (Is the backend running at " + API_BASE + "?)";
+    errorBox.classList.remove('hidden');
+  } finally {
+    document.getElementById('loading').classList.add('hidden');
+  }
+}
+
+// =====================================================================
+// RENDER RESULT CARDS
+// =====================================================================
+function cropName(r) {
+  if (currentLang === 'hi') return r.name_hi;
+  if (currentLang === 'sat') return r.name_sat;
+  return r.name;
+}
+
+function badgeHtml(badge) {
+  const t = LANG[currentLang];
+  if (badge === 'highest_return') return `<span class="badge-return text-xs font-bold px-2.5 py-1 rounded-full">${t.badge_return}</span>`;
+  if (badge === 'soil_safe') return `<span class="badge-safe text-xs font-bold px-2.5 py-1 rounded-full">${t.badge_safe}</span>`;
+  if (badge === 'best_match') return `<span class="badge-best text-xs font-bold px-2.5 py-1 rounded-full">${t.badge_best}</span>`;
+  return '';
+}
+
+function renderResults(recommendations) {
+  const t = LANG[currentLang];
+  const grid = document.getElementById('results-grid');
+  grid.innerHTML = '';
+
+  recommendations.forEach((r, idx) => {
+    const card = document.createElement('div');
+    card.className = 'bg-white rounded-2xl shadow-sm border-2 ' +
+      (idx === 0 ? 'border-wheat' : 'border-gray-100') + ' p-5 flex flex-col gap-3';
+
+    const badges = (r.badges || []).map(badgeHtml).join(' ');
+    const profit = r.profitability;
+    const soil = r.soil_health;
+
+    card.innerHTML = `
+      <div class="flex items-start justify-between gap-2">
+        <h3 class="text-lg font-heading font-bold text-leaf-dark">#${idx + 1} ${cropName(r)}</h3>
+        <span class="text-2xl font-heading font-extrabold text-leaf">${r.final_score}</span>
+      </div>
+      <div class="flex flex-wrap gap-2">${badges}</div>
+
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between"><span class="text-gray-500">${t.suitability}</span><span class="font-bold">${r.suitability_score}%</span></div>
+        <div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-sky h-2 rounded-full" style="width:${r.suitability_score}%"></div></div>
+
+        <div class="flex justify-between"><span class="text-gray-500">${t.soil_health}</span><span class="font-bold">${soil.soil_health_score}%</span></div>
+        <div class="w-full bg-gray-100 rounded-full h-2"><div class="bg-leaf h-2 rounded-full" style="width:${soil.soil_health_score}%"></div></div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 bg-wheat-light/50 rounded-xl p-3 text-center">
+        <div>
+          <p class="text-xs text-soil-dark/70 font-semibold">${t.net_profit}</p>
+          <p class="text-lg font-heading font-extrabold text-soil-dark">₹${profit.net_profit_per_acre_inr.toLocaleString('en-IN')}</p>
+        </div>
+        <div>
+          <p class="text-xs text-soil-dark/70 font-semibold">${t.roi}</p>
+          <p class="text-lg font-heading font-extrabold text-soil-dark">${profit.roi_percent}%</p>
+        </div>
+      </div>
+
+      <p class="text-xs text-gray-600 bg-sky-light/60 rounded-lg p-2">
+        <span class="font-bold">${t.rotation_tip}:</span> ${soil.rotation_tip}
+      </p>
+    `;
+    grid.appendChild(card);
+  });
+
+  document.getElementById('results-section').classList.remove('hidden');
+  document.getElementById('results-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Init default language button styling
+setLanguage('en');
+</script>
+</body>
+</html>
