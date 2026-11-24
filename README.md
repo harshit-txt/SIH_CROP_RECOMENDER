@@ -1,4 +1,4 @@
-# Fasal Sathi — AI-Based Crop Recommendation System (SIH MVP)
+# Fasal Sathi — AI-Based Crop Recommendation System (MVP FOR HACKATHON)
 
 ## Run locally
 ```bash
